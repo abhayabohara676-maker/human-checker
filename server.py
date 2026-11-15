@@ -13,38 +13,87 @@ CORS(app)
 from pydantic_ai import Agent as PydanticAgent
 from pydantic_ai.models.google import GoogleModel
 
-SYSTEM_PROMPT = """You are an expert editor who detects AI-generated "slop" and rewrites it to sound human.
+SYSTEM_PROMPT = """You are an expert editor. You MUST return valid JSON only.
 
-You will receive:
-- The text
-- The language (e.g. "English", "Nepali", "Hindi")
-- The tone (e.g. "Casual", "Professional", "Funny", "Short", "Bold")
+Analyze the text for these AI-slop patterns:
+- generic filler opening
+- robotic transitions
+- listicle brain
+- hollow intensifiers
+- emoji overload
+- no personal voice
+- perfect but empty
 
-Your job has TWO parts:
+Then rewrite the text to sound human, in the same language, matching the requested tone.
 
-PART 1 — Detect the AI-slop patterns. Check for these, in the SAME language as the text:
-- generic filler opening (e.g. "In today's fast-paced world...")
-- robotic transitions (e.g. "Moreover", "Furthermore", "It is important to note")
-- listicle brain (e.g. "Here are 5 ways to...")
-- hollow intensifiers (e.g. "game-changer", "cutting-edge", "transformative")
-- emoji overload (4+ emojis in a row)
-- no personal voice (no "I", no opinion, no story)
-- perfect but empty (grammatically flawless, no concrete details)
+Return EXACTLY this JSON structure, nothing else:
+{"flags": ["pattern1", "pattern2"], "rewritten": "the rewritten text"}
 
-PART 2 — Rewrite the text in the SAME language, keeping the same meaning but making it sound like a real person wrote it. Match the requested tone exactly. Do not add new facts.
-
-Return your answer as JSON ONLY, with this exact structure:
-{
-  "flags": ["list", "of", "slop", "patterns", "found"],
-  "rewritten": "the rewritten text"
-}
-
-If no slop is found, use an empty flags list.
-Return ONLY valid JSON. No explanation, no markdown, no preamble.
+Do not use markdown. Do not add explanation. Only the JSON object.
 """
 
 model = GoogleModel("gemini-flash-lite-latest")
 agent = PydanticAgent(model, system_prompt=SYSTEM_PROMPT)
+
+MAX_CHUNK = 1500  # characters per chunk
+
+def split_into_chunks(text: str):
+    """Split text into chunks at paragraph breaks, then at sentence breaks if needed."""
+    paragraphs = [p.strip() for p in text.split("\n") if p.strip()]
+    chunks = []
+    current = ""
+    for para in paragraphs:
+        if len(current) + len(para) + 1 <= MAX_CHUNK:
+            current = (current + "\n" + para).strip()
+        else:
+            if current:
+                chunks.append(current)
+            # If a single paragraph is too long, split it by sentences
+            if len(para) > MAX_CHUNK:
+                sentences = para.replace(". ", ".|").replace("! ", "!|").replace("? ", "?|").split("|")
+                cur2 = ""
+                for s in sentences:
+                    if len(cur2) + len(s) + 1 <= MAX_CHUNK:
+                        cur2 = (cur2 + " " + s).strip()
+                    else:
+                        if cur2:
+                            chunks.append(cur2)
+                        cur2 = s.strip()
+                if cur2:
+                    chunks.append(cur2)
+            else:
+                current = para
+    if current:
+        chunks.append(current)
+    return chunks
+
+async def rewrite_chunk(text: str, language: str, tone: str):
+    prompt = f"Language: {language}\nTone: {tone}\n\nText:\n{text}"
+    result = await agent.run(prompt)
+    raw = result.output.strip()
+
+    # Clean markdown fences
+    if "```" in raw:
+        parts = raw.split("```")
+        for p in parts:
+            p = p.strip()
+            if p.startswith("json"):
+                p = p[4:].strip()
+            if p.startswith("{"):
+                raw = p
+                break
+
+    # Extract JSON object
+    start = raw.find("{")
+    end = raw.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        raw = raw[start:end+1]
+
+    try:
+        parsed = json.loads(raw)
+        return parsed.get("flags", []), parsed.get("rewritten", text)
+    except Exception:
+        return [], text
 
 @app.route("/rewrite", methods=["POST"])
 def rewrite():
@@ -56,33 +105,24 @@ def rewrite():
     if not text:
         return jsonify({"error": "No text provided"}), 400
 
-    prompt = f"Language: {language}\nTone: {tone}\n\nText:\n{text}"
+    chunks = split_into_chunks(text)
+    all_flags = set()
+    rewritten_parts = []
 
-    async def _ask():
-        result = await agent.run(prompt)
-        return result.output
+    async def _process():
+        for chunk in chunks:
+            flags, rewritten = await rewrite_chunk(chunk, language, tone)
+            for f in flags:
+                all_flags.add(f)
+            rewritten_parts.append(rewritten)
 
     try:
-        raw = asyncio.run(_ask())
-        # Try to parse the JSON the model returned
-        try:
-            # Strip markdown code fences if present
-            cleaned = raw.strip()
-            if cleaned.startswith("```"):
-                cleaned = cleaned.split("```")[1]
-                if cleaned.startswith("json"):
-                    cleaned = cleaned[4:]
-                cleaned = cleaned.strip()
-            parsed = json.loads(cleaned)
-            flags = parsed.get("flags", [])
-            rewritten = parsed.get("rewritten", "")
-            if not rewritten:
-                # fallback: if the model didn't follow the format, use raw as rewrite
-                return jsonify({"flags": [], "rewritten": raw})
-            return jsonify({"flags": flags, "rewritten": rewritten})
-        except json.JSONDecodeError:
-            # If the model didn't return valid JSON, fall back gracefully
-            return jsonify({"flags": [], "rewritten": raw})
+        asyncio.run(_process())
+        return jsonify({
+            "flags": list(all_flags),
+            "rewritten": "\n\n".join(rewritten_parts),
+            "chunks": len(chunks)
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
