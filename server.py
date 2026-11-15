@@ -1,13 +1,20 @@
 import os
 import asyncio
 import json
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
 
 load_dotenv()
 
 app = Flask(__name__)
+@app.route("/")
+def home():
+    return send_from_directory(".", "index.html")
+
+@app.route("/human_checker.html")
+def checker():
+    return send_from_directory(".", "human_checker.html")
 CORS(app)
 
 from pydantic_ai import Agent as PydanticAgent
