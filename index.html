@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Human Checker — Make AI Text Sound Human</title>
+<meta property="og:title" content="Human Checker — Make AI Text Sound Human">
+<meta property="og:description" content="Paste AI-generated text. Get a human rewrite in 40 languages. Free, no signup.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://human-checker.onrender.com/">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; padding: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: radial-gradient(circle at 50% 0%, #1e293b 0%, #0f172a 55%);
+    color: #e2e8f0;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  .container { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+
+  /* Hero */
+  .hero {
+    text-align: center;
+    padding: 100px 24px 70px;
+    position: relative;
+  }
+  .hero::before {
+    content: "";
+    position: absolute;
+    top: 20%; left: 50%;
+    transform: translateX(-50%);
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, rgba(59,130,246,0.15) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .badge {
+    display: inline-block;
+    padding: 6px 14px;
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 999px;
+    font-size: 13px;
+    color: #93c5fd;
+    margin-bottom: 24px;
+    font-weight: 500;
+    animation: fadeUp 0.6s ease both;
+  }
+  .hero h1 {
+    font-size: 56px;
+    font-weight: 800;
+    margin: 0 0 8px;
+    color: #fff;
+    line-height: 1.1;
+    letter-spacing: -1px;
+    animation: fadeUp 0.6s ease both;
+  }
+  .hero h1 span {
+    background: linear-gradient(135deg, #93c5fd, #c4b5fd);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .author {
+    font-size: 16px;
+    color: #94a3b8;
+    margin: 0 0 22px;
+    font-weight: 500;
+    animation: fadeUp 0.6s ease both;
+    animation-delay: 0.05s;
+  }
+  .author strong { color: #93c5fd; font-weight: 700; }
+  .hero p {
+    font-size: 20px;
+    color: #94a3b8;
+    max-width: 580px;
+    margin: 0 auto 36px;
+    animation: fadeUp 0.6s ease both;
+    animation-delay: 0.1s;
+  }
+  .cta {
+    display: inline-block;
+    padding: 20px 44px;
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    color: #052e16;
+    font-size: 20px;
+    font-weight: 700;
+    text-decoration: none;
+    border-radius: 16px;
+    transition: transform 0.15s, box-shadow 0.2s;
+    box-shadow: 0 12px 40px rgba(34, 197, 94, 0.3);
+    animation: fadeUp 0.6s ease both;
+    animation-delay: 0.2s;
+  }
+  .cta:hover { box-shadow: 0 12px 50px rgba(34, 197, 94, 0.5); }
+  .cta:active { transform: scale(0.97); }
+
+  /* Before/After */
+  .example {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin: 40px 0 80px;
+  }
+  @media (max-width: 700px) { .example { grid-template-columns: 1fr; } }
+  .card {
+    padding: 28px;
+    border-radius: 20px;
+    font-size: 16px;
+    backdrop-filter: blur(10px);
+    transition: transform 0.2s;
+  }
+  .card:hover { transform: translateY(-4px); }
+  .card.bad {
+    background: rgba(69, 10, 10, 0.5);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+  }
+  .card.good {
+    background: rgba(5, 46, 22, 0.5);
+    border: 1px solid rgba(34, 197, 94, 0.4);
+  }
+  .card-label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    margin-bottom: 14px;
+  }
+  .card.bad .card-label { color: #f87171; }
+  .card.good .card-label { color: #4ade80; }
+  .card p { margin: 0; color: #e2e8f0; }
+
+  /* Features */
+  .features {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    margin: 60px 0;
+  }
+  @media (max-width: 700px) { .features { grid-template-columns: 1fr; } }
+  .feature {
+    background: rgba(30, 41, 59, 0.6);
+    backdrop-filter: blur(10px);
+    padding: 32px 26px;
+    border-radius: 20px;
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    transition: transform 0.2s, border-color 0.2s;
+  }
+  .feature:hover {
+    transform: translateY(-4px);
+    border-color: rgba(148, 163, 184, 0.35);
+  }
+  .feature h3 {
+    margin: 0 0 10px;
+    color: #93c5fd;
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .feature p { margin: 0; color: #94a3b8; font-size: 15px; }
+
+  /* Footer */
+  footer {
+    text-align: center;
+    padding: 50px 24px;
+    color: #64748b;
+    font-size: 14px;
+    border-top: 1px solid rgba(148, 163, 184, 0.1);
+    margin-top: 40px;
+  }
+
+  /* Animations */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="badge">✦ Free · No signup · 40 languages</div>
+  <h1>Make AI text <span>sound human</span></h1>
+  <div class="author">by <strong>Abhaya Bohara</strong> · Developer</div>
+  <p>Paste AI-generated text. Get a human rewrite — in 40 languages. No signup. No cost.</p>
+  <a class="cta" href="human_checker.html">Try It Now →</a>
+</div>
+
+<div class="container">
+
+  <div class="example">
+    <div class="card bad">
+      <div class="card-label">BEFORE (AI SLOP)</div>
+      <p>In today's fast-paced digital landscape, leveraging cutting-edge AI solutions is a game-changer. Moreover, it is important to note that seamless integration empowers organizations to unlock their full potential. 🚀🔥💡✨</p>
+    </div>
+    <div class="card good">
+      <div class="card-label">AFTER (HUMAN)</div>
+      <p>Using AI tools can really help businesses grow, making everything run smoother and getting better results.</p>
+    </div>
+  </div>
+
+  <div class="features">
+    <div class="feature">
+      <h3>40 Languages</h3>
+      <p>English, Nepali, Hindi, Spanish, French, Arabic, Chinese, Japanese, Thai, Hebrew, and more. One engine, any language.</p>
+    </div>
+    <div class="feature">
+      <h3>Real AI Rewrite</h3>
+      <p>Not word swaps. The AI understands the meaning and says it like a person would — same message, human voice.</p>
+    </div>
+    <div class="feature">
+      <h3>Free &amp; No Signup</h3>
+      <p>No account. No email. No cost. Paste text, click a button, get a human version. That's it.</p>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  Human Checker — a free tool to make AI text sound human. Powered by Gemini.
+</footer>
+
+</body>
+</html>
