@@ -1,5 +1,6 @@
 import os
 import asyncio
+import json
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -19,14 +20,27 @@ You will receive:
 - The language (e.g. "English", "Nepali", "Hindi")
 - The tone (e.g. "Casual", "Professional", "Funny", "Short", "Bold")
 
-Your job:
-1. Detect the AI-slop patterns: generic filler openings, robotic transitions, hollow intensifiers, listicle brain, emoji overload, no personal voice, perfect-but-empty.
-2. Rewrite the text in the SAME language, keeping the same meaning but making it sound like a real person wrote it.
-3. Match the requested tone exactly. If tone is "Short", cut it to the essentials. If "Funny", add light humor. If "Professional", keep it clean and direct. If "Bold", make it punchy. If "Casual", make it relaxed.
-4. Keep it short. Do not add new facts. Do not change the message.
-5. Return ONLY the rewritten text — no explanation, no preamble.
+Your job has TWO parts:
 
-If the text is already human, return it unchanged.
+PART 1 — Detect the AI-slop patterns. Check for these, in the SAME language as the text:
+- generic filler opening (e.g. "In today's fast-paced world...")
+- robotic transitions (e.g. "Moreover", "Furthermore", "It is important to note")
+- listicle brain (e.g. "Here are 5 ways to...")
+- hollow intensifiers (e.g. "game-changer", "cutting-edge", "transformative")
+- emoji overload (4+ emojis in a row)
+- no personal voice (no "I", no opinion, no story)
+- perfect but empty (grammatically flawless, no concrete details)
+
+PART 2 — Rewrite the text in the SAME language, keeping the same meaning but making it sound like a real person wrote it. Match the requested tone exactly. Do not add new facts.
+
+Return your answer as JSON ONLY, with this exact structure:
+{
+  "flags": ["list", "of", "slop", "patterns", "found"],
+  "rewritten": "the rewritten text"
+}
+
+If no slop is found, use an empty flags list.
+Return ONLY valid JSON. No explanation, no markdown, no preamble.
 """
 
 model = GoogleModel("gemini-flash-lite-latest")
@@ -49,8 +63,26 @@ def rewrite():
         return result.output
 
     try:
-        rewritten = asyncio.run(_ask())
-        return jsonify({"rewritten": rewritten})
+        raw = asyncio.run(_ask())
+        # Try to parse the JSON the model returned
+        try:
+            # Strip markdown code fences if present
+            cleaned = raw.strip()
+            if cleaned.startswith("```"):
+                cleaned = cleaned.split("```")[1]
+                if cleaned.startswith("json"):
+                    cleaned = cleaned[4:]
+                cleaned = cleaned.strip()
+            parsed = json.loads(cleaned)
+            flags = parsed.get("flags", [])
+            rewritten = parsed.get("rewritten", "")
+            if not rewritten:
+                # fallback: if the model didn't follow the format, use raw as rewrite
+                return jsonify({"flags": [], "rewritten": raw})
+            return jsonify({"flags": flags, "rewritten": rewritten})
+        except json.JSONDecodeError:
+            # If the model didn't return valid JSON, fall back gracefully
+            return jsonify({"flags": [], "rewritten": raw})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
