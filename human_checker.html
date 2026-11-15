@@ -60,6 +60,11 @@
   }
   textarea:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
   textarea::placeholder { color: #64748b; }
+  .char-count {
+    text-align: right; font-size: 12px; color: #64748b;
+    margin-top: 6px;
+  }
+  .char-count.over { color: #f87171; font-weight: 600; }
   .row { display: flex; gap: 12px; margin-top: 20px; }
   button {
     flex: 1; padding: 16px; font-size: 16px; font-weight: 600; font-family: inherit;
@@ -77,6 +82,23 @@
   .clear {
     background: rgba(51, 65, 85, 0.6); color: #e2e8f0;
     border: 1px solid rgba(148, 163, 184, 0.15);
+  }
+  .upgrade-box {
+    margin-top: 24px; padding: 20px; border-radius: 16px;
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    text-align: center;
+  }
+  .upgrade-btn {
+    display: inline-block; padding: 14px 28px;
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: #fff; font-weight: 700; text-decoration: none;
+    border-radius: 12px; font-size: 16px;
+    box-shadow: 0 8px 24px rgba(59, 130, 246, 0.3);
+  }
+  .upgrade-btn:hover { box-shadow: 0 8px 32px rgba(59, 130, 246, 0.5); }
+  .upgrade-note {
+    font-size: 12px; color: #94a3b8; margin-top: 10px; line-height: 1.5;
   }
   .fixed-box {
     margin-top: 24px; padding: 22px; border-radius: 16px;
@@ -124,7 +146,6 @@
     margin-top: 20px; font-size: 15px;
   }
   .hidden { display: none; }
-
   .history {
     margin-top: 36px;
     padding-top: 24px;
@@ -179,7 +200,7 @@
   <div class="two-col">
     <div class="field">
       <label for="language">Language</label>
-           <select id="language">
+      <select id="language">
         <option value="English">English</option>
         <option value="Nepali">नेपाली (Nepali)</option>
         <option value="Hindi">हिन्दी (Hindi)</option>
@@ -299,7 +320,8 @@
 
   <div class="field">
     <label for="post">Your text</label>
-    <textarea id="post" placeholder="Paste your AI-generated text here... (long text is fine — it will be rewritten in parts)"></textarea>
+    <textarea id="post" placeholder="Paste your AI-generated text here..."></textarea>
+    <div class="char-count"><span id="charCount">0</span> / 5,000 characters (free)</div>
   </div>
 
   <div class="row">
@@ -320,6 +342,11 @@
     <div class="fixed-text" id="fixedText"></div>
   </div>
 
+  <div class="upgrade-box">
+    <a class="upgrade-btn" href="YOUR_KHALTI_LINK_HERE" target="_blank">Upgrade to Pro — $3/month</a>
+    <div class="upgrade-note">Unlimited text length. After paying, send a screenshot to your-email@example.com and I'll unlock Pro within 24 hours.</div>
+  </div>
+
   <div class="history">
     <div class="history-header">
       <div class="history-title">History</div>
@@ -333,6 +360,7 @@
 const SERVER_URL = "https://human-checker.onrender.com/rewrite";
 const HISTORY_KEY = "human_checker_history";
 const MAX_HISTORY = 10;
+const FREE_LIMIT = 5000;
 
 function loadHistory() {
   try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); }
@@ -436,6 +464,11 @@ async function fixPost() {
 
   if (!text) { alert("Paste some text first."); return; }
 
+  if (text.length > FREE_LIMIT) {
+    showError("Free version handles up to 5,000 characters (you pasted " + text.length.toLocaleString() + "). Upgrade to Pro for unlimited length — see the Upgrade button below.");
+    return;
+  }
+
   document.getElementById("fixedBox").classList.add("hidden");
   document.getElementById("flagsBox").classList.add("hidden");
   document.getElementById("errorBox").classList.add("hidden");
@@ -490,15 +523,22 @@ function showError(msg) {
   box.classList.remove("hidden");
 }
 
-renderHistory();
-// Sort the language dropdown alphabetically
-(function sortLanguages() {
-  const select = document.getElementById("language");
-  const options = Array.from(select.options);
-  options.sort((a, b) => a.text.localeCompare(b.text));
-  select.innerHTML = "";
-  options.forEach(opt => select.appendChild(opt));
+// Live character counter
+(function () {
+  const post = document.getElementById("post");
+  const counter = document.getElementById("charCount");
+  const wrap = counter ? counter.parentElement : null;
+  function update() {
+    const len = post.value.length;
+    counter.textContent = len.toLocaleString();
+    if (len > FREE_LIMIT) wrap.classList.add("over");
+    else wrap.classList.remove("over");
+  }
+  post.addEventListener("input", update);
+  update();
 })();
+
+renderHistory();
 </script>
 </body>
 </html>
