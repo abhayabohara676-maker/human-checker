@@ -1,6 +1,7 @@
 import os
 import asyncio
 import json
+import time
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -12,6 +13,9 @@ CORS(app)
 
 from pydantic_ai import Agent as PydanticAgent
 from pydantic_ai.models.google import GoogleModel
+
+# Try these models in order — if one is overloaded, switch to the next
+MODELS = ["gemini-flash-lite-latest", "gemini-2.0-flash-lite", "gemini-1.5-flash"]
 
 SYSTEM_PROMPT = """You are an expert editor. You MUST return valid JSON only.
 
@@ -32,8 +36,8 @@ Return EXACTLY this JSON structure, nothing else:
 Do not use markdown. Do not add explanation. Only the JSON object.
 """
 
-model = GoogleModel("gemini-flash-lite-latest")
-agent = PydanticAgent(model, system_prompt=SYSTEM_PROMPT)
+def get_agent(model_name):
+    return PydanticAgent(GoogleModel(model_name), system_prompt=SYSTEM_PROMPT)
 
 MAX_CHUNK = 1500
 
@@ -65,10 +69,30 @@ def split_into_chunks(text: str):
         chunks.append(current)
     return chunks
 
+async def run_with_retry(prompt, max_retries=2):
+    """Try each model with retries, then fall back to the next model."""
+    last_error = None
+    for model_name in MODELS:
+        agent = get_agent(model_name)
+        for attempt in range(max_retries):
+            try:
+                result = await agent.run(prompt)
+                return result.output
+            except Exception as e:
+                last_error = e
+                # Check if it's a 503 (overloaded) — wait and retry
+                if "503" in str(e) or "high demand" in str(e) or "UNAVAILABLE" in str(e):
+                    wait = 2 ** attempt  # 1s, 2s
+                    await asyncio.sleep(wait)
+                    continue
+                else:
+                    # Not a 503 — don't retry on this model, move to next
+                    break
+    raise last_error
+
 async def rewrite_chunk(text: str, language: str, tone: str):
     prompt = f"Language: {language}\nTone: {tone}\n\nText:\n{text}"
-    result = await agent.run(prompt)
-    raw = result.output.strip()
+    raw = (await run_with_retry(prompt)).strip()
 
     if "```" in raw:
         parts = raw.split("```")
@@ -134,8 +158,7 @@ def see_paper():
 प्रश्नहरू नेपालीमा, SEE स्तरको। प्रत्येक प्रश्नको अंक देखाउनुहोस्।"""
 
         async def _gen():
-            result = await agent.run(prompt)
-            return result.output
+            return await run_with_retry(prompt)
 
         try:
             paper = asyncio.run(_gen())
