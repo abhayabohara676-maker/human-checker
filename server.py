@@ -8,13 +8,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
-@app.route("/")
-def home():
-    return send_from_directory(".", "index.html")
-
-@app.route("/human_checker.html")
-def checker():
-    return send_from_directory(".", "human_checker.html")
 CORS(app)
 
 from pydantic_ai import Agent as PydanticAgent
@@ -42,10 +35,9 @@ Do not use markdown. Do not add explanation. Only the JSON object.
 model = GoogleModel("gemini-flash-lite-latest")
 agent = PydanticAgent(model, system_prompt=SYSTEM_PROMPT)
 
-MAX_CHUNK = 1500  # characters per chunk
+MAX_CHUNK = 1500
 
 def split_into_chunks(text: str):
-    """Split text into chunks at paragraph breaks, then at sentence breaks if needed."""
     paragraphs = [p.strip() for p in text.split("\n") if p.strip()]
     chunks = []
     current = ""
@@ -55,7 +47,6 @@ def split_into_chunks(text: str):
         else:
             if current:
                 chunks.append(current)
-            # If a single paragraph is too long, split it by sentences
             if len(para) > MAX_CHUNK:
                 sentences = para.replace(". ", ".|").replace("! ", "!|").replace("? ", "?|").split("|")
                 cur2 = ""
@@ -79,7 +70,6 @@ async def rewrite_chunk(text: str, language: str, tone: str):
     result = await agent.run(prompt)
     raw = result.output.strip()
 
-    # Clean markdown fences
     if "```" in raw:
         parts = raw.split("```")
         for p in parts:
@@ -90,7 +80,6 @@ async def rewrite_chunk(text: str, language: str, tone: str):
                 raw = p
                 break
 
-    # Extract JSON object
     start = raw.find("{")
     end = raw.rfind("}")
     if start != -1 and end != -1 and end > start:
@@ -132,6 +121,41 @@ def rewrite():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route("/see-paper", methods=["POST"])
+def see_paper():
+    data = request.get_json()
+    subject = data.get("subject", "Compulsory Social Studies")
+    action = data.get("action", "generate")
+
+    if action == "generate":
+        prompt = f"""SEE (कक्षा १०) {subject} विषयको ७५ अंकको नमूना प्रश्नपत्र बनाउनुहोस्।
+संरचना: १० छोटो प्रश्न (१ अंक), ८ मध्यम प्रश्न (४ अंक), ३ लामो प्रश्न (११ अंक)।
+प्रश्नहरू नेपालीमा, SEE स्तरको। प्रत्येक प्रश्नको अंक देखाउनुहोस्।"""
+
+        async def _gen():
+            result = await agent.run(prompt)
+            return result.output
+
+        try:
+            paper = asyncio.run(_gen())
+            return jsonify({"paper": paper})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    return jsonify({"error": "Unknown action"}), 400
+
+@app.route("/")
+def home():
+    return send_from_directory(".", "index.html")
+
+@app.route("/human_checker.html")
+def checker():
+    return send_from_directory(".", "human_checker.html")
+
+@app.route("/see_test.html")
+def see_test():
+    return send_from_directory(".", "see_test.html")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
