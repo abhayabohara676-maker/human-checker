@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ne">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SEE ७५ अंकको परीक्षण</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0;
+    padding: 20px; max-width: 900px; margin: 0 auto; }
+  h1 { color: #93c5fd; text-align: center; }
+  .layout { display: flex; gap: 20px; align-items: flex-start; }
+  .main { flex: 1; }
+  .sidebar { width: 160px; position: sticky; top: 20px; }
+  select, button { width: 100%; padding: 14px; margin: 8px 0;
+    border-radius: 10px; border: 1px solid #334155; background: #1e293b;
+    color: #fff; font-size: 16px; }
+  button { background: #22c55e; color: #052e16; font-weight: bold; cursor: pointer; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .wake-btn { background: #f59e0b; color: #451a03; font-size: 14px; padding: 10px; margin-top: 0; }
+  .run-btn { background: #3b82f6; color: #fff; font-size: 15px; padding: 12px; }
+  .paper { background: #1e293b; padding: 20px; border-radius: 12px;
+    margin-top: 20px; white-space: pre-wrap; line-height: 1.8; font-size: 15px; }
+  .hidden { display: none; }
+  .thinking { color: #94a3b8; font-style: italic; margin-top: 20px; }
+  @media (max-width: 600px) {
+    .layout { flex-direction: column; }
+    .sidebar { width: 100%; position: static; }
+  }
+</style>
+</head>
+<body>
+<h1>SEE ७५ अंकको परीक्षण</h1>
+
+<div class="layout">
+  <div class="main">
+    <select id="subject">
+      <option value="Compulsory Nepali">अनिवार्य नेपाली</option>
+      <option value="Compulsory English">अनिवार्य अंग्रेजी</option>
+      <option value="Compulsory Mathematics">अनिवार्य गणित</option>
+      <option value="Compulsory Science">अनिवार्य विज्ञान</option>
+      <option value="Compulsory Social Studies">अनिवार्य सामाजिक अध्ययन</option>
+      <option value="Optional Mathematics">ऐच्छिक गणित</option>
+      <option value="Economics">अर्थशास्त्र</option>
+      <option value="Account">लेखा</option>
+    </select>
+    <button id="genBtn" onclick="generatePaper()">प्रश्नपत्र बनाउनुहोस्</button>
+    <div id="thinking" class="thinking hidden"></div>
+    <div id="paper" class="paper hidden"></div>
+  </div>
+
+  <div class="sidebar">
+    <button class="wake-btn" onclick="wakeServer()">🔌 Wake Server</button>
+    <button class="run-btn" onclick="runTest()">▶ Run Test</button>
+  </div>
+</div>
+
+<script>
+const SERVER_URL = "https://human-checker.onrender.com/see-paper";
+
+function runTest() {
+  generatePaper();
+}
+
+async function wakeServer() {
+  const thinking = document.getElementById("thinking");
+  thinking.classList.remove("hidden");
+  thinking.textContent = "सर्भर ब्युँझाउँदै... ६० सेकेन्ड पर्खनुहोस्।";
+  try {
+    await fetch(SERVER_URL, { method: "OPTIONS" });
+  } catch (e) {}
+  setTimeout(() => {
+    thinking.classList.add("hidden");
+    alert("सर्भर ब्युँझियो! अब 'Run Test' थिच्नुहोस्।");
+  }, 60000);
+}
+
+async function generatePaper() {
+  const subject = document.getElementById("subject").value;
+  const box = document.getElementById("paper");
+  const thinking = document.getElementById("thinking");
+  const btn = document.getElementById("genBtn");
+
+  box.classList.add("hidden");
+  thinking.classList.remove("hidden");
+  thinking.textContent = "प्रश्नपत्र बन्दै छ... (सर्भर ब्युँझदै छ भने ९० सेकेन्डसम्म लाग्न सक्छ)";
+  btn.disabled = true;
+
+  async function fetchWithTimeout(url, options, timeoutMs = 120000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timeoutId);
+      return res;
+    } catch (e) {
+      clearTimeout(timeoutId);
+      throw e;
+    }
+  }
+
+  try {
+    const res = await fetchWithTimeout(SERVER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subject: subject, action: "generate" })
+    });
+    const data = await res.json();
+    thinking.classList.add("hidden");
+    if (data.error) { box.textContent = "त्रुटि: " + data.error; box.classList.remove("hidden"); return; }
+    box.textContent = data.paper;
+    box.classList.remove("hidden");
+  } catch (e) {
+    thinking.textContent = "सर्भर ब्युँझदै छ... ९० सेकेन्डमा फेरि प्रयास हुनेछ।";
+    setTimeout(async () => {
+      try {
+        const res2 = await fetchWithTimeout(SERVER_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subject: subject, action: "generate" })
+        });
+        const data2 = await res2.json();
+        thinking.classList.add("hidden");
+        if (data2.error) { box.textContent = "त्रुटि: " + data2.error; box.classList.remove("hidden"); return; }
+        box.textContent = data2.paper;
+        box.classList.remove("hidden");
+      } catch (e2) {
+        thinking.classList.add("hidden");
+        box.textContent = "सर्भर अझै ब्युँझिएको छैन। 'Wake Server' थिचेर १ मिनेट पर्खनुहोस्।";
+        box.classList.remove("hidden");
+      } finally { btn.disabled = false; }
+    }, 90000);
+  } finally {
+    if (!thinking.classList.contains("hidden")) return;
+    btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>
